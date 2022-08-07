@@ -3,6 +3,7 @@ Sub FormatFuelSmartData()
 ' FormatFuelSmartData Macro
 '
 ' Created by: RJ Tocci
+' Last updated: 07-18-22
 '
 ' This macro will automatically format data exported from Fuel Smart.
 ' It will select and remove the redundant/unnecessary columns, delete
