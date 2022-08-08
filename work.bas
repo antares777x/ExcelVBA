@@ -3,7 +3,6 @@ Sub FormatFuelSmartData()
 ' FormatFuelSmartData Macro
 '
 ' Created by: RJ Tocci
-' Last updated: 07-18-22
 '
 ' This macro will automatically format data exported from Fuel Smart.
 ' It will select and remove the redundant/unnecessary columns, delete
@@ -44,6 +43,13 @@ Sub FormatFuelSmartData()
     
     ' Format the amount values as currency:
     Columns("I:I").NumberFormat = "$#,##0.00"
+    
+    ' Store ap_vendor data as number instead of text:
+    Range(Cells(2, 1), Cells(lRow, 1)).Select
+    With Selection
+        Selection.NumberFormat = "General"
+        .Value = .Value
+    End With
     
     ' End the macro by selecting the cell A1:
     Range("A1").Select
@@ -110,8 +116,11 @@ Sub FormatNewUnrec()
 '
 ' Work-in-progress, but mostly done
 ' TODO:
-' 1. Load notes from previous unrec to this one (WIP)
-' 2. Add note "taxes due at end of month" for certain Metroplex entries (DONE)
+' 1. Load notes from previous unrec to this one (WIP; currently doing this manually
+' with a VLOOKUP formula and the previous report).
+' 2. Fix the sorting so that it is identical to the initial report sent by SOPS
+' each morning--currently sorts by pulled_timestamp, but maybe should sort by Due Date
+' instead?
 '
 ' Pre-requisites:
 ' 1. Copy the 2nd and 3rd sheets from the unrec to the new data
@@ -123,33 +132,29 @@ Sub FormatNewUnrec()
 '
 
     ' Initialize variables:
-    Range("A1").Select
+    '' Replace Select with variables:
+    Sheets("unrec").Range("A1").Select
 
     ' Delete the dropped_timestamp column:
+    '' Replace Select with variables:
     Range("D:D").Select
     Range("D1").Activate
     Selection.Delete Shift:=xlToLeft
    
     ' Add columns "Terms", "Due Date", "Days Past Due", and "Notes":
-    Range("G1").Select
-    ActiveCell.FormulaR1C1 = "Terms"
-    Range("H1").Select
-    ActiveCell.FormulaR1C1 = "Due Date"
-    Range("I1").Select
-    ActiveCell.FormulaR1C1 = "Days Past Due"
-    Range("J1").Select
-    ActiveCell.FormulaR1C1 = "Notes"
+    Range("G1").Value = "Terms"
+    Range("H1").Value = "Due Date"
+    Range("I1").Value = "Days Past Due"
+    Range("J1").Value = "Notes"
     
     ' Rename Sheets 1, 2, and 3:
     ' The first sheet name may need to be modified based on what gets spit out by Fuel Smart
-    Sheets("unrec").Select
     Sheets("unrec").Name = "Unreconciled - Suppliers"
-    Sheets("Sheet1").Select
     Sheets("Sheet1").Name = "Unreconciled - Carriers"
-    Sheets("Sheet2").Select
     Sheets("Sheet2").Name = "Terms"
     
-    '' Create Suppliers range for the gas suppliers:
+    ' Create Suppliers range for the gas suppliers:
+    '' Replace Select with variables:
     Sheets("Terms").Select
     Columns("A:C").Select
     ' Still researching this... probably a better way to create a named range, but this works
@@ -157,12 +162,14 @@ Sub FormatNewUnrec()
     Range("A1").Select
     
     ' Initialize variables for row/column:
+    '' Replace Select with variables:
     Sheets("Unreconciled - Suppliers").Select
     Range("A1").Select
     lRow = ActiveSheet.Cells(Rows.Count, "A").End(xlUp).Row
     lCol = ActiveSheet.Cells(1, Columns.Count).End(xlToLeft).Column
     
-    ' Sort by due date before creating a table:
+    ' Sort by pulled_timestamp before creating a table:
+    ' May want to add the formula for Due Date and sort by that instead?
     ActiveWorkbook.Worksheets("Unreconciled - Suppliers").Sort.SortFields.Clear
     ActiveWorkbook.Worksheets("Unreconciled - Suppliers").Sort.SortFields.Add2 Key:=Range _
         (Cells(2, 3), Cells(lRow, 3)), SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:= _
@@ -195,15 +202,25 @@ Sub FormatNewUnrec()
     ActiveCell.FormulaR1C1 = _
         "=TODAY()+IF(OR(WEEKDAY(TODAY())=5,WEEKDAY(TODAY())=6),MAX(4,Terms!R4C9),MAX(2,Terms!R4C9))-RC[-1]"
     
-    ' Format columns pulled_timestamp, bl_adj_amt, Days Past Due:
-    Columns("C:C").NumberFormat = "m/d/yy"
-    Columns("E:E").NumberFormat = "#,##0.00"
-    Columns("H:H").NumberFormat = "m/d/yy"
-    Columns("I:I").NumberFormat = "#,##0"
+    ' Store supplier_id numbers and as numbers instead of text
+    ' Need to use a loop; can't pass more than one argument to Value method
+    '' Replace Select with variables:
+    Range(Cells(2, 1), Cells(lRow, 1)).Select
+    With Selection
+        Selection.NumberFormat = "General"
+        .Value = .Value
+    End With
+    
+    ' Format columns supplier_id, pulled_timestamp, bl_adj_amt, Days Past Due:
+    Columns("C:C").NumberFormat = "m/d/yy"   ' pulled_timestamp
+    Columns("E:E").NumberFormat = "#,##0.00" ' bl_adj_amt
+    Columns("H:H").NumberFormat = "m/d/yy"   ' Due Date
+    Columns("I:I").NumberFormat = "#,##0"    ' Days Past Due
     
     ' Remove entries with bl_adj_amount <1000:
     ActiveSheet.ListObjects("Table1").Range.AutoFilter Field:=5, Criteria1:= _
         "<1000", Operator:=xlAnd
+    '' Replace Select with variables:
     Range("A2").Select
     Range(Selection, Selection.End(xlDown)).Select
     Selection.EntireRow.Delete
@@ -213,13 +230,18 @@ Sub FormatNewUnrec()
     
     ' Set Notes for Metroplex invoices bl_adj_amt < 3500 = "taxes due at end of month"
     ' Set up the filters (Metroplex, blank notes, <3500 bl_adj_amt)
-    ActiveSheet.ListObjects("Table1").Range.AutoFilter Field:=2, Criteria1:= _
-        "Metroplex Energy Inc"
-    ActiveSheet.ListObjects("Table1").Range.AutoFilter Field:=10, Criteria1:= _
-        "="
-    ActiveSheet.ListObjects("Table1").Range.AutoFilter Field:=5, Criteria1:= _
-        "<3500", Operator:=xlAnd
+    ActiveSheet.ListObjects("Table1").Range.AutoFilter _
+        Field:=2, _
+        Criteria1:="Metroplex Energy Inc"
+    ActiveSheet.ListObjects("Table1").Range.AutoFilter _
+        Field:=10, _
+        Criteria1:="="
+    ActiveSheet.ListObjects("Table1").Range.AutoFilter _
+        Field:=5, _
+        Criteria1:="<3500", _
+        Operator:=xlAnd
     ' Iterate through the blank cells and add "taxes due at end of month"
+    '' Replace Select with variables:
     Range(Cells(2, 10), Cells(lRow, 10)).SpecialCells(xlCellTypeVisible).Select
     With Selection
         Selection.Value = "taxes due at end of month"
@@ -228,6 +250,8 @@ Sub FormatNewUnrec()
     ActiveSheet.ListObjects("Table1").Range.AutoFilter Field:=10 'Blank notes
     ActiveSheet.ListObjects("Table1").Range.AutoFilter Field:=5  '<3500 bl_adj_amt
     ActiveSheet.ListObjects("Table1").Range.AutoFilter Field:=2  'Metroplex
+    
+    '' Try using VBA to open a template file, copy relevant info, then close the file
     
     '' Create formula to pull data from previous unrec report
     '' Need to create a string to refer to the previous report, or
@@ -298,14 +322,12 @@ Sub FormatACH()
     End With
     
     ' Rename column headers DocumentNo and Amount; add ACH DETAIL:
-    Range("B1").Select
-    ActiveCell.FormulaR1C1 = "DocumentNo"
-    Range("F1").Select
-    ActiveCell.FormulaR1C1 = "Amount"
-    Range("D2").Select
-    ActiveCell.FormulaR1C1 = "ACH DETAIL"
-    Range("E2").Select
-    ActiveCell.FormulaR1C1 = "=R[1]C"
+    Range("B1").Value = "DocumentNo"
+    Range("F1").Value = "Amount"
+    Range("D2").Value = "ACH DETAIL"
+    'Range("E2").Select
+    'ActiveCell.FormulaR1C1 = "=R[1]C"
+    Range("E2").Value = "=R[1]C"
 
     ' Add borders and right-alignment:
     ' Not sure how much of this is redundant, so I left all the code intact.
@@ -384,5 +406,3 @@ Sub FormatACH()
     Range("A1").Select
 
 End Sub
-
-
