@@ -4,21 +4,34 @@ Sub FormatFuelSmartData()
 '
 ' Created by: RJ Tocci
 '
+' Last Update: 09-12-22
+'
 ' This macro will automatically format data exported from Fuel Smart.
-' It will select and remove the redundant/unnecessary columns, delete
+' It will select and hide the redundant/unnecessary columns, delete
 ' duplicate data entries, and convert the remaining data to a table
 ' named "Table1".
 '
-' Note that the exported data is .XLS format and won't have tables.
+' Note that the exported data is .XLS format and won't have Excel tables
+' when you open the file if you close it.
 '
-' I might want to put all this on a separate sheet in the future and leave
-' the main sheet with the exported data untouched.
+' Macro has been modified to keep an original copy of the exported data from
+' Fuel Smart on the second sheet labeled "raw."
+'
+' TODO: none
+'
 '
 
+    ' Create a new sheet for the data
+    ActiveSheet.Copy Before:=Sheets(1)
+    
+    ' Rename sheet1 "formatted" and sheet2 "raw"
+    Sheets(1).Name = "formatted"
+    Sheets(2).Name = "raw"
+    
     ' Remove duplicate entries:
     ActiveSheet.Range("$A:$AQ").RemoveDuplicates Columns:=2, Header:= _
         xlYes
-        
+    
     ' Hide/delete extra columns:
     Range("AL:AQ,AE:AJ,K:L,N:AB,F:H,C:C").Select
     Selection.EntireColumn.Hidden = True
@@ -61,13 +74,23 @@ Sub FormatFuelSmartTally()
 '
 ' Created by: RJ Tocci
 '
-' This macro formats my tally sheet before I print it.
+' This macro formats my tally sheet before I print it so that
+' it fits on a single page.
+'
+' TODO:
+' [DONE] Add a tally below the total
+' [DONE] Organize the tally so that it's inline with data entries
+' [DONE] Add keyer name to tally
+' [DONE] Move tally, total, and keyer name to beginning of document
+' [DONE] Fix final column width when only one entry exists in that column
+' [DONE] Move column width code to outside the Do Until Loop for efficiency
 '
 
     ' Initialize variables
     Range("A1").Select
     Range(Selection, Selection.End(xlDown)).Select
     lTotal = Application.WorksheetFunction.Sum(Selection)
+    lNum = Application.WorksheetFunction.Count(Selection)
     lRow = Selection.Rows.Count
     lCount = 1
     
@@ -77,8 +100,6 @@ Sub FormatFuelSmartTally()
         ActiveSheet.Cells(47, lCount).Select
         Range(Selection, Selection.End(xlDown)).Select
         Selection.Cut
-        ' AutoFit the column width:
-        Columns(lCount).EntireColumn.AutoFit
         ' Move that data to the next column
         ActiveSheet.Cells(1, lCount + 1).Select
         ActiveSheet.Paste
@@ -86,15 +107,24 @@ Sub FormatFuelSmartTally()
         lCount = lCount + 1
         lRow = lRow - 46
     Loop
-        
-    ' Create a totals cell at the end of the last column.
-    ActiveSheet.Cells(lRow + 1, lCount).Select
-    Selection.Value = lTotal
     
-    ' AutoFit the width of the final column:
-    Columns(lCount).EntireColumn.AutoFit
+    ' Create new first row for tally, total, and keyer name
+    Columns("A:A").Select
+    Selection.Insert Shift:=xlToRight, CopyOrigin:=xlFormatFromLeftOrAbove
+    Range("A1").Select
     
-    ' Color-code the total yellow:
+    ' Display the total in the first cell
+    Range("A1").Value = lTotal
+    Selection.NumberFormat = "$#,##0.00"      ' format as currency
+    
+    ' Display the number of invoices keyed in the cell below
+    Range("A2").Value = "=CONCATENATE(""" & lNum & ""","" invoices"")"
+    
+    ' Display the name of the keyer:
+    Range("A3").Value = "RJ Tocci"
+    
+    ' Color-code the total, tally, and keyer yellow:
+    Range("A1:A3").Select
     With Selection.Interior
         .Pattern = xlSolid
         .PatternColorIndex = xlAutomatic
@@ -103,9 +133,12 @@ Sub FormatFuelSmartTally()
         .PatternTintAndShade = 0
     End With
     
-    ' Format the total as currency
-    Selection.NumberFormat = "$#,##0.00"
+    ' AutoFit the columns:
+    Columns("A:J").EntireColumn.AutoFit     ' using J as arbitrary max column
     
+    ' Select first cell before ending the macro
+    Range("A1").Select
+            
 End Sub
 
 Sub FormatNewUnrec()
@@ -114,29 +147,32 @@ Sub FormatNewUnrec()
 '
 ' Created by: RJ Tocci
 '
-' Work-in-progress, but mostly done
 ' TODO:
-' 1. Load notes from previous unrec to this one (WIP; currently doing this manually
+' [DONE] Fix the sorting so that it is identical to the initial report sent by SOPS
+' each morning.
+' [XXXX] Load notes from previous unrec to this one (WIP; currently doing this manually
 ' with a VLOOKUP formula and the previous report).
-' 2. Fix the sorting so that it is identical to the initial report sent by SOPS
-' each morning--currently sorts by pulled_timestamp, but maybe should sort by Due Date
-' instead?
+' [XXXX] Use macro to open unrec template, copy relevant data, close it, and paste it so
+' that you won't need to open "unrec template" manually before running the macro - WIP. Macro
+' currently can't open/close the "unrec template" workbook, but does copy the info properly.
 '
+' IMPORTANT PLEASE READ:
 ' Pre-requisites:
-' 1. Copy the 2nd and 3rd sheets from the unrec to the new data
-' 2. Sheets need to be labelled correctly prior to using the macro
+' 1. Open workbook named "unrec template"
 '
-' Creating a macro to format a new unrec report from exported data from Fuel Smart
+' MACRO WILL FAIL IF "unrec temple.xlsx" IS NOT ALREADY OPEN
+'
+' Creating a macro to format a new unrec report from exported data from Fuel Smart.
 ' Macro will need to create new columns, new sheets, and delete redundant rows that
 ' fit certain criteria.
 '
 
     ' Initialize variables:
-    '' Replace Select with variables:
+    '' TODO: replace Select with variables
     Sheets("unrec").Range("A1").Select
 
     ' Delete the dropped_timestamp column:
-    '' Replace Select with variables:
+    '' TODO: replace Select with variables:
     Range("D:D").Select
     Range("D1").Activate
     Selection.Delete Shift:=xlToLeft
@@ -146,44 +182,53 @@ Sub FormatNewUnrec()
     Range("H1").Value = "Due Date"
     Range("I1").Value = "Days Past Due"
     Range("J1").Value = "Notes"
+        
+    ' Create the "Terms" sheet (preq: open "unrec template")
+    ' Activate the "unrec template" workbook (should already be open)
+    Windows("unrec template").Activate
+    ' Copy "Terms" sheet data:
+    Sheets("Terms").Select
+    Range("A1:J125").Select
+    Selection.Copy
+    ' Careful with this so you don't overwrite the unrec file you're using!
+    ' Other workbook should be named "unrec" for this to work:
+    Windows("unrec").Activate
+    ' Create a new sheet called "Terms" and paste the data:
+    Sheets.Add After:=ActiveSheet
+    Sheets("Sheet1").Name = "Terms"
+    Sheets("Terms").Select
+    ActiveSheet.Paste ' TODO: replace this with adding a new sheet and labeling it "Terms"
+    ' Autofit column width and select A1:
+    Columns("A:J").EntireColumn.AutoFit
+    Range("A1").Select
     
     ' Rename Sheets 1, 2, and 3:
     ' The first sheet name may need to be modified based on what gets spit out by Fuel Smart
     Sheets("unrec").Name = "Unreconciled - Suppliers"
-    Sheets("Sheet1").Name = "Unreconciled - Carriers"
-    Sheets("Sheet2").Name = "Terms"
+    '' Commenting below lines out while I work on a macro that creates the "Terms" sheet
+    '' Also appears that the "Unreconciled - Carriers" data is not needed
+    'Sheets("Sheet1").Name = "Unreconciled - Carriers"
+    'Sheets("Sheet2").Name = "Terms"
     
     ' Create Suppliers range for the gas suppliers:
-    '' Replace Select with variables:
+    '' TODO: replace Select with variables:
     Sheets("Terms").Select
     Columns("A:C").Select
     ' Still researching this... probably a better way to create a named range, but this works
+    ' Create named range "Suppliers" for formula simplification
+    ' Note that this range includes the headers and actually includes the entire columns,
+    ' so it should be somewhat future-proof when new suppliers are added (make sure to update the
+    ' template if that happens so that you include the new supplier in the named range).
     ActiveWorkbook.Names.Add Name:="Suppliers", RefersToR1C1:="=Terms!C1:C3"
     Range("A1").Select
     
     ' Initialize variables for row/column:
-    '' Replace Select with variables:
+    '' TODO: replace Select with variables:
     Sheets("Unreconciled - Suppliers").Select
     Range("A1").Select
     lRow = ActiveSheet.Cells(Rows.Count, "A").End(xlUp).Row
     lCol = ActiveSheet.Cells(1, Columns.Count).End(xlToLeft).Column
-    
-    ' Sort by pulled_timestamp before creating a table:
-    ' May want to add the formula for Due Date and sort by that instead?
-    ActiveWorkbook.Worksheets("Unreconciled - Suppliers").Sort.SortFields.Clear
-    ActiveWorkbook.Worksheets("Unreconciled - Suppliers").Sort.SortFields.Add2 Key:=Range _
-        (Cells(2, 3), Cells(lRow, 3)), SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:= _
-        xlSortNormal
-    With ActiveWorkbook.Worksheets("Unreconciled - Suppliers").Sort
-    ' Make sure dimensions are correct with the added columns
-        .SetRange Range(Cells(2, 1), Cells(lRow, 10))
-        .Header = xlNo
-        .MatchCase = False
-        .Orientation = xlTopToBottom
-        .SortMethod = xlPinYin
-        .Apply
-    End With
-    
+        
     ' Convert data ranges to a table:
     ActiveSheet.ListObjects.Add(xlSrcRange, Range(Cells(1, 1), Cells(lRow, _
         lCol)), , xlYes).Name = "Table1"
@@ -202,9 +247,53 @@ Sub FormatNewUnrec()
     ActiveCell.FormulaR1C1 = _
         "=TODAY()+IF(OR(WEEKDAY(TODAY())=5,WEEKDAY(TODAY())=6),MAX(4,Terms!R4C9),MAX(2,Terms!R4C9))-RC[-1]"
     
+    ' To match official unrec, sort by pulled_timestamp, then supplier, then Days Past Due
+    ' First, sort by pulled_timestamp:
+    ActiveWorkbook.Worksheets("Unreconciled - Suppliers").ListObjects("Table1"). _
+        Sort.SortFields.Clear
+    ' Make sure dimensions are correct with the added columns
+    ActiveWorkbook.Worksheets("Unreconciled - Suppliers").ListObjects("Table1"). _
+        Sort.SortFields.Add2 Key:=Range(Cells(2, 3), Cells(lRow, 3)), SortOn:=xlSortOnValues, Order _
+        :=xlAscending, DataOption:=xlSortNormal
+    With ActiveWorkbook.Worksheets("Unreconciled - Suppliers").ListObjects("Table1" _
+        ).Sort
+        .Header = xlYes
+        .MatchCase = False
+        .Orientation = xlTopToBottom
+        .SortMethod = xlPinYin
+        .Apply
+    End With
+    ' Sort by supplier_name:
+    ActiveWorkbook.Worksheets("Unreconciled - Suppliers").ListObjects("Table1"). _
+        Sort.SortFields.Clear
+    ActiveWorkbook.Worksheets("Unreconciled - Suppliers").ListObjects("Table1"). _
+        Sort.SortFields.Add2 Key:=Range(Cells(2, 2), Cells(lRow, 2)), SortOn:=xlSortOnValues, Order _
+        :=xlAscending, DataOption:=xlSortNormal
+    With ActiveWorkbook.Worksheets("Unreconciled - Suppliers").ListObjects("Table1" _
+        ).Sort
+        .Header = xlYes
+        .MatchCase = False
+        .Orientation = xlTopToBottom
+        .SortMethod = xlPinYin
+        .Apply
+    End With
+    ' Sort by "Days Past Due" in descending order:
+    ActiveWorkbook.Worksheets("Unreconciled - Suppliers").ListObjects("Table1"). _
+        Sort.SortFields.Clear
+    ActiveWorkbook.Worksheets("Unreconciled - Suppliers").ListObjects("Table1"). _
+        Sort.SortFields.Add2 Key:=Range(Cells(2, 9), Cells(lRow, 9)), SortOn:=xlSortOnValues, Order _
+        :=xlDescending, DataOption:=xlSortNormal
+    With ActiveWorkbook.Worksheets("Unreconciled - Suppliers").ListObjects("Table1" _
+        ).Sort
+        .Header = xlYes
+        .MatchCase = False
+        .Orientation = xlTopToBottom
+        .SortMethod = xlPinYin
+        .Apply
+    End With
+    
     ' Store supplier_id numbers and as numbers instead of text
-    ' Need to use a loop; can't pass more than one argument to Value method
-    '' Replace Select with variables:
+    '' TODO: replace Select with variables
     Range(Cells(2, 1), Cells(lRow, 1)).Select
     With Selection
         Selection.NumberFormat = "General"
@@ -220,7 +309,7 @@ Sub FormatNewUnrec()
     ' Remove entries with bl_adj_amount <1000:
     ActiveSheet.ListObjects("Table1").Range.AutoFilter Field:=5, Criteria1:= _
         "<1000", Operator:=xlAnd
-    '' Replace Select with variables:
+    '' TODO: replace Select with variables
     Range("A2").Select
     Range(Selection, Selection.End(xlDown)).Select
     Selection.EntireRow.Delete
@@ -241,7 +330,7 @@ Sub FormatNewUnrec()
         Criteria1:="<3500", _
         Operator:=xlAnd
     ' Iterate through the blank cells and add "taxes due at end of month"
-    '' Replace Select with variables:
+    '' TODO replace Select with variables
     Range(Cells(2, 10), Cells(lRow, 10)).SpecialCells(xlCellTypeVisible).Select
     With Selection
         Selection.Value = "taxes due at end of month"
@@ -250,8 +339,6 @@ Sub FormatNewUnrec()
     ActiveSheet.ListObjects("Table1").Range.AutoFilter Field:=10 'Blank notes
     ActiveSheet.ListObjects("Table1").Range.AutoFilter Field:=5  '<3500 bl_adj_amt
     ActiveSheet.ListObjects("Table1").Range.AutoFilter Field:=2  'Metroplex
-    
-    '' Try using VBA to open a template file, copy relevant info, then close the file
     
     '' Create formula to pull data from previous unrec report
     '' Need to create a string to refer to the previous report, or
@@ -278,7 +365,8 @@ Sub FormatACH()
 ' Created by: RJ Tocci
 '
 ' TODO:
-' 1. Update macro to work with open invoices as well as closed
+' [XXXX] Update macro to work with open invoices as well as closed
+' [XXXX] Delete extra sheets if payments match
 '
 ' SAP layout: GAS RECONCILIATION LAYOUT - ROBERT K
 '
@@ -325,8 +413,6 @@ Sub FormatACH()
     Range("B1").Value = "DocumentNo"
     Range("F1").Value = "Amount"
     Range("D2").Value = "ACH DETAIL"
-    'Range("E2").Select
-    'ActiveCell.FormulaR1C1 = "=R[1]C"
     Range("E2").Value = "=R[1]C"
 
     ' Add borders and right-alignment:
