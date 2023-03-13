@@ -4,7 +4,7 @@ Sub FormatFuelSmartData()
 '
 ' Created by: RJ Tocci
 '
-' Last Update: 09-12-22
+' Module Last Updated: 03-06-23
 '
 ' This macro will automatically format data exported from Fuel Smart.
 ' It will select and hide the redundant/unnecessary columns, delete
@@ -17,7 +17,14 @@ Sub FormatFuelSmartData()
 ' Macro has been modified to keep an original copy of the exported data from
 ' Fuel Smart on the second sheet labeled "raw."
 '
-' TODO: none
+' TODO:
+'
+' [XXXX] Include a new column for the carrier name for the freight
+' invoices that you key. EDIT turns out this is impossible--there
+' is no column for carrier name in the exported audit data.
+' [XXXX] Optional: Use a range as a dictionary for comparing id number to
+' Carrier/Supplier name, that way you could open/reference that info and copy it
+' into a new column in the exported data.
 '
 '
 
@@ -150,22 +157,53 @@ Sub FormatNewUnrec()
 ' TODO:
 ' [DONE] Fix the sorting so that it is identical to the initial report sent by SOPS
 ' each morning.
-' [XXXX] Load notes from previous unrec to this one (WIP; currently doing this manually
-' with a VLOOKUP formula and the previous report).
+' [DONE] Load notes from previous unrec to this one
+' [DONE] Enter "taxes due at end of month" to Metroplex BOLs that fit the criteria.
+' Very close to solving this, only issue is I get
+' an error when I use method .SpecialCells(xlCellTypeVisible).Select and it fails to find any cells
+' in the table that fit that criteria.
+' HA--solved this by excluding one of the filters entirely!
 ' [XXXX] Use macro to open unrec template, copy relevant data, close it, and paste it so
 ' that you won't need to open "unrec template" manually before running the macro - WIP. Macro
 ' currently can't open/close the "unrec template" workbook, but does copy the info properly.
+' [XXXX] Switch from using the "unrec template" workbook to just using the prevUnrec workbook
+' so that I won't need two open files before running the macro, only one.
 '
 ' IMPORTANT PLEASE READ:
 ' Pre-requisites:
 ' 1. Open workbook named "unrec template"
+' 2. Open previous unrec report
+' 3. Previous unrec report and new one must be in the same directory (I think...)
+'
+' How to export a new unrec report from Fuel Smart:
+' 1. Open Fuel Smart and navigate to Research Reports in Fuel Payable
+' 2. Select "Unreconciled Liability"
+' 3. In Report Options window, select "Supplier" and "Detail"
+' 4. Press "Enter" or select "Preview"
+' 5. File > Save-As an Excel document named "unrec.xlsx" -> might have errors if different name
+' 6. DONE
 '
 ' MACRO WILL FAIL IF "unrec temple.xlsx" IS NOT ALREADY OPEN
+' This file does not need to be in the same directory (as far as I can tell so far).
 '
 ' Creating a macro to format a new unrec report from exported data from Fuel Smart.
 ' Macro will need to create new columns, new sheets, and delete redundant rows that
 ' fit certain criteria.
 '
+    ' Ask user to input name of previous unrec report so that you can use VLOOKUP to
+    ' match all of the notes from the previous report:
+    Dim prevUnrec As String
+    
+    ' Set value for prevUnrec while testing updates to the macro (comment out otherwise):
+    'prevUnrec = "Unreconciled 03-08-23 local.xlsx"
+    ' Comment-out until STOP if prevUnrec already given a value
+TryAgain:
+On Error GoTo Err1
+    prevUnrec = InputBox(prompt:="Enter previous unrec file name:")
+    If prevUnrec = "" Then
+        Exit Sub
+    Else
+    ' STOP
 
     ' Initialize variables:
     '' TODO: replace Select with variables
@@ -185,12 +223,13 @@ Sub FormatNewUnrec()
         
     ' Create the "Terms" sheet (preq: open "unrec template")
     ' Activate the "unrec template" workbook (should already be open)
-    Windows("unrec template").Activate
+    ' WIP--replace this code with references to "prevUnrec" instead of "unrec template"
+        ' DONE
+    Windows(prevUnrec).Activate
     ' Copy "Terms" sheet data:
     Sheets("Terms").Select
     Range("A1:J125").Select
     Selection.Copy
-    ' Careful with this so you don't overwrite the unrec file you're using!
     ' Other workbook should be named "unrec" for this to work:
     Windows("unrec").Activate
     ' Create a new sheet called "Terms" and paste the data:
@@ -201,6 +240,7 @@ Sub FormatNewUnrec()
     ' Autofit column width and select A1:
     Columns("A:J").EntireColumn.AutoFit
     Range("A1").Select
+    ' TODO--copy the unrec carriers sheet in addition to terms?
     
     ' Rename Sheets 1, 2, and 3:
     ' The first sheet name may need to be modified based on what gets spit out by Fuel Smart
@@ -309,7 +349,7 @@ Sub FormatNewUnrec()
     ' Remove entries with bl_adj_amount <1000:
     ActiveSheet.ListObjects("Table1").Range.AutoFilter Field:=5, Criteria1:= _
         "<1000", Operator:=xlAnd
-    '' TODO: replace Select with variables
+    ' TODO: replace Select with variables
     Range("A2").Select
     Range(Selection, Selection.End(xlDown)).Select
     Selection.EntireRow.Delete
@@ -317,46 +357,53 @@ Sub FormatNewUnrec()
     ActiveSheet.ListObjects("Table1").Range.AutoFilter Field:=5
     lRow = ActiveSheet.Cells(Rows.Count, "A").End(xlUp).Row
     
-    ' Set Notes for Metroplex invoices bl_adj_amt < 3500 = "taxes due at end of month"
-    ' Set up the filters (Metroplex, blank notes, <3500 bl_adj_amt)
+    ' Select the cells in the Notes column and pull the old data from prevUnrec:
+    Range(Cells(2, 10), Cells(lRow, 10)).Select
+    ' Arbitrarily using row=1200 as the max row for the prevUnrec workbook -> TODO set variables for this?
+    With Selection
+        Selection.Value = "=IFNA(VLOOKUP(RC[-6],'[" & prevUnrec & "]Unreconciled - Suppliers'!R2C4:R1200C10,7,0),"""")"
+    End With
+
+    '' Try this to select the right answer and filter down to get the VLOOKUP function in each row
+    Range("J2").Select
+    ActiveSheet.ListObjects("Table1").Range.AutoFilter Field:=10
+
+    ' Copy & paste the values to remove references to prevUnrec:
+    Range(Cells(2, 10), Cells(lRow, 10)).Select
+    Selection.Copy
+    Selection.PasteSpecial Paste:=xlPasteValues, Operation:=xlNone, SkipBlanks _
+        :=False, Transpose:=False
+
+    ' Add filters to locate Metroplex BOLs that are only open because of taxes
     ActiveSheet.ListObjects("Table1").Range.AutoFilter _
-        Field:=2, _
-        Criteria1:="Metroplex Energy Inc"
-    ActiveSheet.ListObjects("Table1").Range.AutoFilter _
-        Field:=10, _
-        Criteria1:="="
-    ActiveSheet.ListObjects("Table1").Range.AutoFilter _
-        Field:=5, _
-        Criteria1:="<3500", _
-        Operator:=xlAnd
-    ' Iterate through the blank cells and add "taxes due at end of month"
-    '' TODO replace Select with variables
+        Field:=2, Criteria1:="Metroplex Energy Inc", _
+        Field:=5, Criteria1:="<3500", Operator:=xlAnd
+
+    ' NOTE--if the above filters fail to find any cells, this next line will cause an error
+    ' Add "taxes due at end of month" for each relevant cell in Notes column:
     Range(Cells(2, 10), Cells(lRow, 10)).SpecialCells(xlCellTypeVisible).Select
     With Selection
         Selection.Value = "taxes due at end of month"
     End With
-    ' Clear the filters
-    ActiveSheet.ListObjects("Table1").Range.AutoFilter Field:=10 'Blank notes
+
+    ' Clear the filters:
     ActiveSheet.ListObjects("Table1").Range.AutoFilter Field:=5  '<3500 bl_adj_amt
     ActiveSheet.ListObjects("Table1").Range.AutoFilter Field:=2  'Metroplex
-    
-    '' Create formula to pull data from previous unrec report
-    '' Need to create a string to refer to the previous report, or
-    '' ask the user to input a filename/file path; not sure how to do that
-    '' I do know how to input the formula into the necessary cells though
-    'ActiveSheet.ListObjects("Table1").Range.AutoFilter Field:=10, Criteria1:= _
-    '    "="
-    'Range(Cells(2, 10), Cells(lRow, 10)).SpecialCells(xlCellTypeVisible).Select
-    'With Selection
-    '    ActiveCell.FormulaR1C1 = "=VLOOKUP(RC[-5],Suppliers,3,0)"
-    'End With
-    'ActiveSheet.ListObjects("Table1").Range.AutoFilter Field:=10 'Blank notes
-    
+        
     ' Resize the columns:
     Columns("A:J").EntireColumn.AutoFit
     
     ' End the macro by selecting cell A1:
     Range("A1").Select
+    Application.CutCopyMode = False     ' this will de-select the highlighted cells
+    
+    ' Comment out until STOP if value for prevUnrec predetermined:
+    Exit Sub
+    End If
+Err1:
+    MsgBox "File name error. Leave blank to exit."
+    GoTo TryAgain
+    ' STOP
 
 End Sub
 
@@ -490,5 +537,191 @@ Sub FormatACH()
     
     ' End macro by selecting A1:
     Range("A1").Select
+
+End Sub
+
+Sub FormatCarrierUnrec()
+'
+' Created by: RJ Tocci
+'
+' TODO:
+' [DONE] Copy the carrier sheet so that you leave an unmodified version
+' [DONE] Reformat the carrier sheet by removing the subtotals
+' [DONE] Copy the VLOOKUP formula to read the previous unrec and update cells
+' [DONE] Add error statements to prevent user input from breaking the macro
+' [XXXX] Update cells w/highlighting from previous unrec report -> check notes from
+' 3/6/23 since I found a good source from someone online who had the same question:
+' https://stackoverflow.com/questions/22151426/vlookup-to-copy-color-of-a-cell
+' Macro27() also contains a copy of this code for reference.
+' [DONE] Change order of functions so that entering "" in the user prompt ends
+' the macro BEFORE any of the other functions are called. Use InputBox function
+' at the beginning of the macro instead of right before you need it.
+' [DONE] Fix error replacing ALL "0" with "" so that it only replaces when val=0 AND len=1
+' [DONE] Update the macro so that after you replace all "0" cells in Notes with "", Find/Replace
+' will go back to using xlPart as default instead of xlWhole.
+'
+' Copies and reformats the Carrier sheet of the Unrec report such that
+' all of the entries are organized into a single table.  Also copies the notes
+' from previous unrec report (as specified by the user) and adds then to the
+' appropriate Notes column to the current unrec report.
+'
+' WARNING
+' MACRO WILL FAIL IF PREVIOUS UNREC REPORT (AS SPECIFIED BY USER) IS NOT ALREADY OPEN
+' AND macro will also fail if both unrec reports are not saved in the same directory
+'
+' Enter "" in the user prompt to end the macro.  Otherwise, it will loop until the user input
+' fits the criteria.
+'
+
+    Dim prevUnrec As String
+    ' TryAgain and Err1 being used for error catching
+    ' If user input causes an error, loop until input is valid
+    ' If input "", end the function early without changing anything
+    ' That way if I go to run the macro and forgot to open the file,
+    ' I can enter "" and not risk losing any data or overwriting an unsaved file
+TryAgain:
+On Error GoTo Err1
+    ' User could still enter a valid string that's not a valid file name, in
+    ' which case, the macro will work, but the cells in the notes columns will
+    ' all appear as #REF errors
+    prevUnrec = InputBox(prompt:="Enter previous unrec file name:")
+    If prevUnrec = "" Then
+        Exit Sub
+    Else
+
+        ' Copy the carrier sheet so that you leave an unmodified version
+        ' After this exectues, the newly created copy will be the active worksheet
+        Sheets("Unreconciled - Carriers").Select
+        ActiveSheet.Copy Before:=Sheets(1)
+    
+        ' Rename worksheets:
+        Sheets(1).Name = "Carriers formatted"
+        Sheets(3).Name = "Carriers raw"
+    
+        ' Delete the subtotal lines from the new carrier sheet
+        Range("A1").Select
+        Selection.RemoveSubtotal
+    
+        ' Rename some of the column headers to shrink width
+        ' Need to do this before creating a table to ensure proper size
+        Range("A1").Value = "ID"
+        Range("C1").Value = "Pull"
+        Range("D1").Value = "Drop"
+        Range("E1").Value = "BL"
+        Range("F1").Value = "Amt"
+        Range("G1").Value = "Gallons"
+        Range("H1").Value = "Due"
+        Range("I1").Value = "DPD"          ' Days Past Due
+        Range("J1").Value = "RJ Notes"     ' AP notes
+        Range("K1").Value = "Ted Notes"    ' SOPS notes
+    
+        ' Initialize variables to count row and column length
+        lRow = ActiveSheet.Cells(Rows.Count, "B").End(xlUp).Row
+        lCol = ActiveSheet.Cells(1, Columns.Count).End(xlToLeft).Column
+        ActiveSheet.ListObjects.Add(xlSrcRange, Range(Cells(1, 1), Cells(lRow, _
+            lCol)), , xlYes).Name = "Table1"
+        
+        ' Add totals row with sum and count:
+        ActiveSheet.ListObjects("Table1").ShowTotals = True
+        ActiveSheet.ListObjects("Table1").ListColumns("Amt"). _
+            TotalsCalculation = xlTotalsCalculationSum
+        ActiveSheet.ListObjects("Table1").ListColumns("Ted Notes").TotalsCalculation = _
+            xlTotalsCalculationNone
+        ActiveSheet.ListObjects("Table1").ListColumns("Gallons").TotalsCalculation = _
+            xlTotalsCalculationCount
+        
+        ' Reformat the date columns (Pull & Drop):
+        Range(Cells(2, 3), Cells(lRow, 4)).Select
+        With Selection
+            Selection.NumberFormat = "mm/dd/yy"
+            .Value = .Value
+        End With
+    
+        ' Start by asking user for name of previous unrec file
+        ' NOTE: closing the box or entering wrong info causes an error
+        ' potential errors -> loop InputBox function until input is valid or ""
+            ' case sensitivity of file name - unknown if that would throw an error, maybe #REF?
+            ' missing/wrong file extension in file name (#REF error for notes cells)
+            ' file not open when macro runs (#REF error for notes cells)
+            ' closing the input box when prompted for the file name
+            ' #REF error if both unrec files are not in the same directory--hadn't thought of this one
+        
+        ' Try copying the formatting--could do this by creating a range for BLs in prevUnrec and
+        ' a range for BLs in the new unrec, then copy and paste the font color and cell highlighting
+        ' I don't think this works... untested
+        'Dim srcRange As Range
+        'srcLRow = prevUnrec.ActiveSheet.Cells(Rows.Count, "E").End(xlUp).Row
+        'srcLCol = prevUnrec.ActiveSheet.Cells(1, Columns.Count).End(xlToLeft).Column
+        'srcRange = prevUnrec.ActiveSheet.Cells(srcLRow, srcLCol)
+        
+        Range("J2").Select
+        ' Set the VLOOKUP formula to reference prevUnrec for Notes from AP:
+        ActiveCell.FormulaR1C1 = _
+            "=IFNA(VLOOKUP([@BL],'" & prevUnrec & "'!Table1[[BL]:[Ted Notes]],6,0),"""")"
+        Range("J2").Select
+        ' Copy the formula for each row in the table:
+        Selection.AutoFill Destination:=Range("Table1[RJ Notes]")
+        Range("Table1[RJ Notes]").Select
+        ' Repeat for the next column for notes from SOPS:
+        Range("K2").Select
+        ActiveCell.FormulaR1C1 = _
+            "=IFNA(VLOOKUP([@BL],'" & prevUnrec & "'!Table1[[BL]:[Ted Notes]],7,0),"""")"
+        Range("K2").Select
+        ' Copy the formula for each row in the table:
+        Selection.AutoFill Destination:=Range("Table1[Ted Notes]")
+        Range("Table1[Ted Notes]").Select
+        
+        '' WIP--Refer to prevUnrec.Range of BLs and iterate through them to copy the relevant info?
+        'Windows(prevUnrec).Activate
+    
+        ' Need to copy data from two final columns and paste without referencing
+        ' the previous unrec report -> same as Copy&Paste values only
+        Range(Cells(2, 10), Cells(lRow, 11)).Select
+        Selection.Copy
+        Selection.PasteSpecial Paste:=xlPasteValues, Operation:=xlNone, SkipBlanks _
+            :=False, Transpose:=False
+    
+        ' Replace "0" values with blank cell:
+        ' Had to modify this so that only cells with len=1 and val=0 would be replaced
+        ' I think including xlWhole changes Ctrl+F in Excel and doesn't change it back after? Confirmed
+        ' Should use xlPart to switch it back, not sure best way how since I don't need to use Find or Replace again
+        'Selection.Replace What:="0", Replacement:=""      ' This code replaces ALL 0
+        Selection.Replace 0, "", xlWhole                   ' xlWhole tells .Replace to look at the whole string
+        
+        ' So what I could do is run Find that fails and include an error-catch that exits the sub to reset
+        ' xlWhole back to xlPart so I don't have to remember to do so manually after running this macro
+        ' DONE--I put this code right before exiting the sub
+    
+        ' Autofit column width:
+        Columns("A:K").EntireColumn.AutoFit
+    
+        ' Hide Drop column:
+        Range("D:D").Select
+        Selection.EntireColumn.Hidden = True
+    
+        ' NOTE: Notes columns are still copied to clipboard and surrounded by dashed lines
+        ' I believe this code will clear it:
+        Application.CutCopyMode = False
+
+        ' Finish Macro by selecting cell A1
+        Range("A1").Select
+        
+        ' Attempt to find a non-existant string to reset xlWhole to xlPart:
+        Dim DNErange As Range
+        Set DNErange = Columns(1).Find("blablabla", , xlValues, xlPart, xlByRows, xlNext)
+        If DNErange Is Nothing Then Exit Sub
+        
+        Exit Sub
+        
+    End If
+    
+' This is for error catching with the user input
+' Enter "" to exit the macro
+' All other errors will loop back to the user input prompt
+' Entering a proper string name that doesn't match an open unrec file name will
+' cause all of the Notes to read "#REF" since the VLOOKUP will fail.
+Err1:
+    MsgBox "File name error. Leave blank to exit."
+    GoTo TryAgain
 
 End Sub
