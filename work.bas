@@ -4,7 +4,7 @@ Sub FormatFuelSmartData()
 '
 ' Created by: RJ Tocci
 '
-' Module Last Updated: 03-06-23
+' Module Last Updated: 03-13-23
 '
 ' This macro will automatically format data exported from Fuel Smart.
 ' It will select and hide the redundant/unnecessary columns, delete
@@ -21,14 +21,15 @@ Sub FormatFuelSmartData()
 '
 ' [XXXX] Include a new column for the carrier name for the freight
 ' invoices that you key. EDIT turns out this is impossible--there
-' is no column for carrier name in the exported audit data.
-' [XXXX] Optional: Use a range as a dictionary for comparing id number to
+' is no column for carrier name in the exported audit data.  I could
+' add one in, but should I?
+' [XXXX] Optional: Use a range as a table/dictionary for comparing id number to
 ' Carrier/Supplier name, that way you could open/reference that info and copy it
-' into a new column in the exported data.
-'
+' into a new column in the exported data if desired.  Supplier short name is already
+' present, so this would really only effect carriers.
 '
 
-    ' Create a new sheet for the data
+    ' Create a new sheet for the formatted data:
     ActiveSheet.Copy Before:=Sheets(1)
     
     ' Rename sheet1 "formatted" and sheet2 "raw"
@@ -91,13 +92,16 @@ Sub FormatFuelSmartTally()
 ' [DONE] Move tally, total, and keyer name to beginning of document
 ' [DONE] Fix final column width when only one entry exists in that column
 ' [DONE] Move column width code to outside the Do Until Loop for efficiency
+' [XXXX] Set the font and font size to a specific value--shouldn't need to do
+' this since I've never changed those settings, but if I share the macro it
+' might be wise to add that to this subroutine.
 '
 
     ' Initialize variables
     Range("A1").Select
     Range(Selection, Selection.End(xlDown)).Select
-    lTotal = Application.WorksheetFunction.Sum(Selection)
-    lNum = Application.WorksheetFunction.Count(Selection)
+    lTotal = Application.WorksheetFunction.Sum(Selection)   ' total sum of keyed invoices
+    lNum = Application.WorksheetFunction.Count(Selection)   ' total count of keyed invoices
     lRow = Selection.Rows.Count
     lCount = 1
     
@@ -162,41 +166,50 @@ Sub FormatNewUnrec()
 ' Very close to solving this, only issue is I get
 ' an error when I use method .SpecialCells(xlCellTypeVisible).Select and it fails to find any cells
 ' in the table that fit that criteria.
-' HA--solved this by excluding one of the filters entirely!
-' [XXXX] Use macro to open unrec template, copy relevant data, close it, and paste it so
-' that you won't need to open "unrec template" manually before running the macro - WIP. Macro
-' currently can't open/close the "unrec template" workbook, but does copy the info properly.
-' [XXXX] Switch from using the "unrec template" workbook to just using the prevUnrec workbook
+' HA--solved this by excluding one of the filters entirely!  Took me a while before I realized
+' that solution would work.
+' [DONE] Switch from using the "unrec template" workbook to just using the prevUnrec workbook
 ' so that I won't need two open files before running the macro, only one.
+' [XXXX] Use macro to open previous unrec, copy relevant data, close it, and paste it so
+' that you won't need to open the previous unrec manually before running the macro - WIP. Macro
+' currently can't open/close the workbook, but does copy the info properly.  In most cases, the
+' previous unrec report will already be open when I receive the new one and go to run this macro.
+' [XXXX] Test whether or not the previous unrec needs the filters off for the macro to pull the
+' data properly into the new unrec.  By default, the unrec reports are sent to me with some of
+' the suppliers filtered out based on the notes.
+' [DONE] Replace any of the data pulled into "Notes" that ="0".  NOTE--be careful not to
+' replace ALL zeros in any Notes cells, only replace 0 when by itself.
 '
 ' IMPORTANT PLEASE READ:
 ' Pre-requisites:
-' 1. Open workbook named "unrec template"
-' 2. Open previous unrec report
-' 3. Previous unrec report and new one must be in the same directory (I think...)
+' 1. Open previous unrec report
+' 2. Previous unrec report and new one must be in the same directory (unconfirmed)
 '
 ' How to export a new unrec report from Fuel Smart:
 ' 1. Open Fuel Smart and navigate to Research Reports in Fuel Payable
 ' 2. Select "Unreconciled Liability"
 ' 3. In Report Options window, select "Supplier" and "Detail"
 ' 4. Press "Enter" or select "Preview"
-' 5. File > Save-As an Excel document named "unrec.xlsx" -> might have errors if different name
+' 5. File > Save-As an Excel document named "unrec.xlsx" -> this macro fails if the file is
+' saved under a different name (working on improving that).
 ' 6. DONE
 '
-' MACRO WILL FAIL IF "unrec temple.xlsx" IS NOT ALREADY OPEN
+' MACRO WILL FAIL IF PREVIOUS UNREC IS NOT ALREADY OPEN
 ' This file does not need to be in the same directory (as far as I can tell so far).
 '
 ' Creating a macro to format a new unrec report from exported data from Fuel Smart.
-' Macro will need to create new columns, new sheets, and delete redundant rows that
-' fit certain criteria.
+' Macro will need to create new columns, new sheets, sort the BOLs to match the
+' sorting from previous reports, and delete redundant rows that fit certain criteria.
 '
     ' Ask user to input name of previous unrec report so that you can use VLOOKUP to
     ' match all of the notes from the previous report:
     Dim prevUnrec As String
+    Dim newUnrec As String
+    newUnrec = ActiveWorkbook.Name
     
     ' Set value for prevUnrec while testing updates to the macro (comment out otherwise):
     'prevUnrec = "Unreconciled 03-08-23 local.xlsx"
-    ' Comment-out until STOP if prevUnrec already given a value
+    ' Comment-out until STOP if prevUnrec already given a value (i.e. above statement)
 TryAgain:
 On Error GoTo Err1
     prevUnrec = InputBox(prompt:="Enter previous unrec file name:")
@@ -207,7 +220,7 @@ On Error GoTo Err1
 
     ' Initialize variables:
     '' TODO: replace Select with variables
-    Sheets("unrec").Range("A1").Select
+    Sheets(1).Range("A1").Select
 
     ' Delete the dropped_timestamp column:
     '' TODO: replace Select with variables:
@@ -221,36 +234,34 @@ On Error GoTo Err1
     Range("I1").Value = "Days Past Due"
     Range("J1").Value = "Notes"
         
-    ' Create the "Terms" sheet (preq: open "unrec template")
-    ' Activate the "unrec template" workbook (should already be open)
-    ' WIP--replace this code with references to "prevUnrec" instead of "unrec template"
-        ' DONE
+    ' Create the "Terms" sheet based off the previous unrec report (needs to be open before macro is run)
     Windows(prevUnrec).Activate
-    ' Copy "Terms" sheet data:
     Sheets("Terms").Select
+    
+    ' Test replacing next two lines with single line?
+    'Range("A1:J125").Copy
     Range("A1:J125").Select
     Selection.Copy
-    ' Other workbook should be named "unrec" for this to work:
-    Windows("unrec").Activate
+    
+    Range("A1").Select
+    Windows(newUnrec).Activate
     ' Create a new sheet called "Terms" and paste the data:
     Sheets.Add After:=ActiveSheet
-    Sheets("Sheet1").Name = "Terms"
+    Sheets(2).Name = "Terms"
     Sheets("Terms").Select
-    ActiveSheet.Paste ' TODO: replace this with adding a new sheet and labeling it "Terms"
+    ActiveSheet.Paste
     ' Autofit column width and select A1:
     Columns("A:J").EntireColumn.AutoFit
     Range("A1").Select
+    
     ' TODO--copy the unrec carriers sheet in addition to terms?
+    ' As of now, it looks like the exported data for carrier/supplier are separated
     
     ' Rename Sheets 1, 2, and 3:
     ' The first sheet name may need to be modified based on what gets spit out by Fuel Smart
-    Sheets("unrec").Name = "Unreconciled - Suppliers"
-    '' Commenting below lines out while I work on a macro that creates the "Terms" sheet
-    '' Also appears that the "Unreconciled - Carriers" data is not needed
-    'Sheets("Sheet1").Name = "Unreconciled - Carriers"
-    'Sheets("Sheet2").Name = "Terms"
+    Sheets(1).Name = "Unreconciled - Suppliers"
     
-    ' Create Suppliers range for the gas suppliers:
+    ' Create Suppliers range:
     '' TODO: replace Select with variables:
     Sheets("Terms").Select
     Columns("A:C").Select
@@ -363,7 +374,7 @@ On Error GoTo Err1
     With Selection
         Selection.Value = "=IFNA(VLOOKUP(RC[-6],'[" & prevUnrec & "]Unreconciled - Suppliers'!R2C4:R1200C10,7,0),"""")"
     End With
-
+    
     '' Try this to select the right answer and filter down to get the VLOOKUP function in each row
     Range("J2").Select
     ActiveSheet.ListObjects("Table1").Range.AutoFilter Field:=10
@@ -374,6 +385,9 @@ On Error GoTo Err1
     Selection.PasteSpecial Paste:=xlPasteValues, Operation:=xlNone, SkipBlanks _
         :=False, Transpose:=False
 
+    ' Replace "0" values with blank cell:
+    Selection.Replace 0, "", xlWhole        ' xlWhole tells .Replace to look at the whole string
+    
     ' Add filters to locate Metroplex BOLs that are only open because of taxes
     ActiveSheet.ListObjects("Table1").Range.AutoFilter _
         Field:=2, Criteria1:="Metroplex Energy Inc", _
@@ -392,6 +406,11 @@ On Error GoTo Err1
         
     ' Resize the columns:
     Columns("A:J").EntireColumn.AutoFit
+    
+    ' Attempt to find a non-existant string to reset xlWhole to xlPart:
+    Dim DNErange As Range
+    Set DNErange = Columns(1).Find("blablabla", , xlValues, xlPart, xlByRows, xlNext)
+    If DNErange Is Nothing Then Exit Sub
     
     ' End the macro by selecting cell A1:
     Range("A1").Select
@@ -412,7 +431,8 @@ Sub FormatACH()
 ' Created by: RJ Tocci
 '
 ' TODO:
-' [XXXX] Update macro to work with open invoices as well as closed
+' [XXXX] Update macro to work with open invoices as well as closed, depending
+' on whichever option you're working with.
 ' [XXXX] Delete extra sheets if payments match
 '
 ' SAP layout: GAS RECONCILIATION LAYOUT - ROBERT K
@@ -442,14 +462,10 @@ Sub FormatACH()
     
     ' Formula to find the total and format it in F2:
     Range("F2").Select
-    ''Formula sums the total for the column up to row 1000, which in some
-    ''circumstances may be too small of a value, or may slow down the macro if
-    ''too high of a value.  Probably a better way to do this.
-    ActiveCell.FormulaR1C1 = "=SUM(R[1]C:R[1000]C)*-1"
+    ActiveCell.FormulaR1C1 = "=SUM(R[1]C:R[1000]C)*-1"   ' row 1000 used as arbitrary max row
     Selection.Style = "Currency"
     
-    ' Store invoice numbers and BL numbers as numbers instead of text
-    ' Need to use a loop; can't pass more than one argument to Value method
+    ' Store invoice numbers and BL numbers as numbers instead of text:
     Range(Cells(3, 1), Cells(lRow, 3)).Select
     With Selection
         Selection.NumberFormat = "General"
@@ -529,6 +545,7 @@ Sub FormatACH()
         .PatternTintAndShade = 0
     End With
     
+    '' WIP
     '' Delete extra sheets (only if payments match):
     'Sheets("Sheet2").Select
     'ActiveWindow.SelectedSheets.Delete
@@ -559,6 +576,9 @@ Sub FormatCarrierUnrec()
 ' [DONE] Fix error replacing ALL "0" with "" so that it only replaces when val=0 AND len=1
 ' [DONE] Update the macro so that after you replace all "0" cells in Notes with "", Find/Replace
 ' will go back to using xlPart as default instead of xlWhole.
+' [DONE] Create new sheet for carrier term length. Keep separate (temporarily) from the original Terms
+' sheet until I can reconcile both of them with accurate information based on Fuel Smart. Currently both
+' vendor names and term lengths from the Terms sheet DO NOT match data in Fuel Smart.
 '
 ' Copies and reformats the Carrier sheet of the Unrec report such that
 ' all of the entries are organized into a single table.  Also copies the notes
@@ -573,7 +593,11 @@ Sub FormatCarrierUnrec()
 ' fits the criteria.
 '
 
+    ' Initialize variables for current workbook/unrec and previous unrec
+    Dim newUnrec As String
     Dim prevUnrec As String
+    newUnrec = ActiveWorkbook.Name ' this is the new unrec (currently open)
+
     ' TryAgain and Err1 being used for error catching
     ' If user input causes an error, loop until input is valid
     ' If input "", end the function early without changing anything
@@ -630,30 +654,42 @@ On Error GoTo Err1
         ActiveSheet.ListObjects("Table1").ListColumns("Gallons").TotalsCalculation = _
             xlTotalsCalculationCount
         
-        ' Reformat the date columns (Pull & Drop):
+        ' Reformat the date columns (Pull, Drop, Due):
         Range(Cells(2, 3), Cells(lRow, 4)).Select
         With Selection
             Selection.NumberFormat = "mm/dd/yy"
             .Value = .Value
         End With
-    
-        ' Start by asking user for name of previous unrec file
-        ' NOTE: closing the box or entering wrong info causes an error
-        ' potential errors -> loop InputBox function until input is valid or ""
-            ' case sensitivity of file name - unknown if that would throw an error, maybe #REF?
-            ' missing/wrong file extension in file name (#REF error for notes cells)
-            ' file not open when macro runs (#REF error for notes cells)
-            ' closing the input box when prompted for the file name
-            ' #REF error if both unrec files are not in the same directory--hadn't thought of this one
+        Columns("H:H").NumberFormat = "mm/dd/yy"
         
-        ' Try copying the formatting--could do this by creating a range for BLs in prevUnrec and
-        ' a range for BLs in the new unrec, then copy and paste the font color and cell highlighting
-        ' I don't think this works... untested
-        'Dim srcRange As Range
-        'srcLRow = prevUnrec.ActiveSheet.Cells(Rows.Count, "E").End(xlUp).Row
-        'srcLCol = prevUnrec.ActiveSheet.Cells(1, Columns.Count).End(xlToLeft).Column
-        'srcRange = prevUnrec.ActiveSheet.Cells(srcLRow, srcLCol)
+        ' Create a new sheet for Carrier Terms
+        Sheets.Add Before:=Sheets(4)
+        Sheets(4).Name = "Carrier Terms"     ' the new sheet should now be the active sheet
         
+        Windows(prevUnrec).Activate
+        Sheets("Carrier Terms").Select
+        Range("Table2[#All]").Select
+        Selection.Copy
+        
+        Windows(newUnrec).Activate
+        Sheets("Carrier Terms").Select
+        Range("A1").Select
+        ActiveSheet.Paste
+        Columns("A:C").EntireColumn.AutoFit
+        Range("A1").Select
+        
+        ' Update the formula for Due Dates based on the new carrier info:
+        Sheets("Carriers formatted").Select
+        Range("H2").Select
+        ' Formula simply replaces the "15" with "VLOOKUP([@[carrier_name]],Table2,3,0)" so that it
+        ' uses the actual term dates as they appear in Fuel Smart instead of 15 days for all vendors
+        ActiveCell.FormulaR1C1 = _
+            "=ROUNDDOWN(C3+VLOOKUP([@[carrier_name]],Table2,3,0),0)+IF(WEEKDAY(ROUNDDOWN(C3+VLOOKUP([@[carrier_name]],Table2,3,0),0))=7,2,IF(WEEKDAY(ROUNDDOWN(C3+VLOOKUP([@[carrier_name]],Table2,3,0),0))=1,1,0))"
+        Range("H2").Select
+        Selection.AutoFill Destination:=Range("Table1[Due]")
+        Range("Table1[Due]").Select
+        
+        ' Create formula to pull notes into the Carriers formatted sheet:
         Range("J2").Select
         ' Set the VLOOKUP formula to reference prevUnrec for Notes from AP:
         ActiveCell.FormulaR1C1 = _
@@ -670,37 +706,26 @@ On Error GoTo Err1
         ' Copy the formula for each row in the table:
         Selection.AutoFill Destination:=Range("Table1[Ted Notes]")
         Range("Table1[Ted Notes]").Select
-        
-        '' WIP--Refer to prevUnrec.Range of BLs and iterate through them to copy the relevant info?
-        'Windows(prevUnrec).Activate
-    
+                
         ' Need to copy data from two final columns and paste without referencing
         ' the previous unrec report -> same as Copy&Paste values only
+        Sheets("Carriers formatted").Select
         Range(Cells(2, 10), Cells(lRow, 11)).Select
         Selection.Copy
         Selection.PasteSpecial Paste:=xlPasteValues, Operation:=xlNone, SkipBlanks _
             :=False, Transpose:=False
     
         ' Replace "0" values with blank cell:
-        ' Had to modify this so that only cells with len=1 and val=0 would be replaced
-        ' I think including xlWhole changes Ctrl+F in Excel and doesn't change it back after? Confirmed
-        ' Should use xlPart to switch it back, not sure best way how since I don't need to use Find or Replace again
-        'Selection.Replace What:="0", Replacement:=""      ' This code replaces ALL 0
-        Selection.Replace 0, "", xlWhole                   ' xlWhole tells .Replace to look at the whole string
+        Selection.Replace 0, "", xlWhole        ' xlWhole tells .Replace to look at the whole string
         
-        ' So what I could do is run Find that fails and include an error-catch that exits the sub to reset
-        ' xlWhole back to xlPart so I don't have to remember to do so manually after running this macro
-        ' DONE--I put this code right before exiting the sub
-    
         ' Autofit column width:
         Columns("A:K").EntireColumn.AutoFit
-    
+        
         ' Hide Drop column:
         Range("D:D").Select
         Selection.EntireColumn.Hidden = True
     
-        ' NOTE: Notes columns are still copied to clipboard and surrounded by dashed lines
-        ' I believe this code will clear it:
+        ' Clear the clipboard:
         Application.CutCopyMode = False
 
         ' Finish Macro by selecting cell A1
@@ -723,5 +748,97 @@ On Error GoTo Err1
 Err1:
     MsgBox "File name error. Leave blank to exit."
     GoTo TryAgain
+
+End Sub
+
+Sub FormatSuspenseReport()
+'
+' Created by: RJ Tocci
+'
+' WIP MACRO
+'
+' Macro formats the suspense report data exported from Fuel Smart.  To export,
+' go to Fuel Smart > Fuel Payable > Reports > Auto-Reconcile Invoice Summary
+' select "Open" and choose "SH Open Invoice Report" then select "Preview."
+' Save this data as any filename and the macro should work properly.
+'
+' The main use of this macro would be to get the data on suspended invoices in Fuel Smart
+' and compare it to BOLs that are still open on the unrec report; this can be done with a VLOOKUP
+' formula once the BLs are converted from text to number (otherwise it will appear as #N/A).  This
+' can be another tool used to track down invoices that we have received but not been able to key.
+'
+' TODO
+' [DONE] Hide irrelevant columns, fit to width.
+' [XXXX] Add appropriate cell formatting for each column.
+' [DONE] Create a "Notes" column for any user-input that might be relevant.
+' [DONE] Create a column to track the number of times an invoice/BOL appears in the data. Sometimes
+' invoices (and BOLs? researching) can appear more than once, and removing duplicates would be a mistake
+' because the rest of the rows differ depending on circumstances.
+' [XXXX] Organize above info about the process to get the data from Fuel Smart into a more clear/concise, numbered list
+' that's easier to read.
+
+    ' Copy the sheet with the original exported data to maintain an unmodified version
+    ' After this exectues, the newly created copy will be the active worksheet
+    Sheets(1).Select
+    ActiveSheet.Copy Before:=Sheets(1)
+    
+    ' Rename worksheets -> this method doesn't need me to know the worksheet names; should apply this info past macros
+    Sheets(1).Name = "modified"
+    Sheets(2).Name = "raw"
+    
+    ' Rename column headers
+    Range("A1").Value = "ID"
+    Range("B1").Value = "Vendor"
+    Range("C1").Value = "Invoice"
+    Range("E1").Value = "Date"
+    Range("F1").Value = "Due"
+    Range("I1").Value = "Club"         ' destination
+    Range("M1").Value = "Gallons"      ' invoiced gallons
+    Range("O1").Value = "BL"
+    Range("P1").Value = "Gross"        ' gross gallons
+    Range("Q1").Value = "Net"          ' net gallons
+    Range("R1").Value = "Amt"          ' invoiced amount
+    ' Adding additional columns:
+    Range("S1").Value = "Count"        ' counts the frequency of the invoice number; finds duplicates
+    Range("T1").Value = "Notes"        ' Notes column for user input
+    
+    ' Reorganize data into an Excel table
+    ' Initialize variables to count row and column length
+    lRow = ActiveSheet.Cells(Rows.Count, "A").End(xlUp).Row
+    lCol = ActiveSheet.Cells(1, Columns.Count).End(xlToLeft).Column
+    ActiveSheet.ListObjects.Add(xlSrcRange, Range(Cells(1, 1), Cells(lRow, _
+        lCol)), , xlYes).Name = "Table1"
+    
+    ' Add subtotal for total amount - WIP
+    ' Add subtotal for invoice count - WIP
+    ' Add subtotal for UNIQUE invoice count - WIP
+    ' Sort table by invoice date
+    ' OPTIONAL - create a table to verify some of the ap_vendor numbers--some look invalid/outdated
+    
+    ' Add formula for Count column:
+    Range("S2").Select
+    ActiveCell.FormulaR1C1 = "=COUNTIF(Table1[Invoice],RC[-16])"
+    
+    ' Change formatting of date columns, gallons, etc
+    'Range(Cells(2, 5), Cells(lRow, 6)).Select
+    'Selection.NumberFormat = "m/d/yy"
+    Columns("E:E").NumberFormat = "mm/dd/yy"   ' invoice date
+    Columns("F:F").NumberFormat = "mm/dd/yy"   ' due date
+    ' Change the BL column to store values as numbers instead of text
+    Range(Cells(2, 15), Cells(lRow, 15)).Select
+    With Selection
+        Selection.NumberFormat = "General"
+        .Value = .Value
+    End With
+    
+    ' Format column width
+    Columns("A:T").EntireColumn.AutoFit
+    
+    ' Hide irrelevant columns - D(?), G, H, J, L, N
+    Range("D:D,G:H,J:J,L:L,N:N").Select
+    Selection.EntireColumn.Hidden = True
+    
+    ' End macro by selecting A1:
+    Range("A1").Select
 
 End Sub
